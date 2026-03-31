@@ -1,5 +1,5 @@
-const User = require('../models/User');
 const Seller = require('../models/Seller');
+const { findNearbyWithProfile } = require('../utils/nearbyAggregation');
 
 async function upsertSeller(req, res) {
   if (req.user.role !== 'seller') {
@@ -19,40 +19,25 @@ async function upsertSeller(req, res) {
 
 async function getNearby(req, res) {
   const { lat, lng, radius, page, limit, category } = req.query;
-  const lngNum = Number(lng);
-  const latNum = Number(lat);
   const maxDistance = Number(radius);
-  const skip = (Number(page) - 1) * Number(limit);
 
-  const geoMatch = {
+  let items = await findNearbyWithProfile({
     role: 'seller',
-    location: {
-      $near: {
-        $geometry: { type: 'Point', coordinates: [lngNum, latNum] },
-        $maxDistance: maxDistance,
-      },
-    },
-  };
+    profileCollection: Seller.collection.name,
+    foreignUserField: 'userId',
+    lat,
+    lng,
+    maxDistanceMeters: maxDistance,
+    page,
+    limit,
+  });
 
-  const users = await User.find(geoMatch).skip(skip).limit(Number(limit)).lean();
-  const userIds = users.map((u) => u._id);
-
-  let sellerQuery = { userId: { $in: userIds } };
   if (category) {
-    const safe = category.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    sellerQuery.inventory = { $elemMatch: { category: { $regex: new RegExp(safe, 'i') } } };
+    const re = new RegExp(category.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    items = items.filter((s) =>
+      (s.inventory || []).some((inv) => inv.category && re.test(inv.category))
+    );
   }
-
-  const sellers = await Seller.find(sellerQuery).populate('userId', '-password').lean();
-
-  const order = new Map(users.map((u, i) => [u._id.toString(), i]));
-  sellers.sort((a, b) => (order.get(a.userId._id.toString()) ?? 999) - (order.get(b.userId._id.toString()) ?? 999));
-
-  const items = sellers.map((s) => ({
-    ...s,
-    user: s.userId,
-    userId: s.userId?._id,
-  }));
 
   return res.json({
     items,

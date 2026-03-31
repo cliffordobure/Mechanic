@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
@@ -40,8 +41,23 @@ app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
  *     tags: [System]
  *     summary: Health check
  */
-app.get('/health', (req, res) => {
-  res.json({ ok: true });
+app.get('/health', async (req, res) => {
+  const payload = { ok: true, database: mongoose.connection.name };
+  if (mongoose.connection.readyState === 1) {
+    try {
+      const User = require('./models/User');
+      const Mechanic = require('./models/Mechanic');
+      const Seller = require('./models/Seller');
+      payload.counts = {
+        mechanics: await Mechanic.countDocuments(),
+        sellers: await Seller.countDocuments(),
+        demoUsers: await User.countDocuments({ email: /@marketplace\.demo$/ }),
+      };
+    } catch (e) {
+      payload.countsError = e.message;
+    }
+  }
+  res.json(payload);
 });
 
 app.use((err, req, res, next) => {

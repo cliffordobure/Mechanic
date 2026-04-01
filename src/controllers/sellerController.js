@@ -1,5 +1,6 @@
 const Seller = require('../models/Seller');
-const { findNearbyWithProfile } = require('../utils/nearbyAggregation');
+const { findNearbyWithAutoProfile, findBrowseWithAutoProfile } = require('../utils/nearbyAggregation');
+const { defaultShopName } = require('../utils/roleProfileDefaults');
 
 async function upsertSeller(req, res) {
   if (req.user.role !== 'seller') {
@@ -21,16 +22,32 @@ async function getNearby(req, res) {
   const { lat, lng, radius, page, limit, category } = req.query;
   const maxDistance = Number(radius);
 
-  let items = await findNearbyWithProfile({
+  let items = await findNearbyWithAutoProfile({
     role: 'seller',
-    profileCollection: Seller.collection.name,
-    foreignUserField: 'userId',
+    ProfileModel: Seller,
+    setOnInsertForUser: (u) => ({
+      shopName: defaultShopName(u.name),
+      inventory: [],
+    }),
     lat,
     lng,
     maxDistanceMeters: maxDistance,
     page,
     limit,
   });
+
+  if (items.length === 0) {
+    items = await findBrowseWithAutoProfile({
+      role: 'seller',
+      ProfileModel: Seller,
+      setOnInsertForUser: (u) => ({
+        shopName: defaultShopName(u.name),
+        inventory: [],
+      }),
+      page,
+      limit,
+    });
+  }
 
   if (category) {
     const re = new RegExp(category.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');

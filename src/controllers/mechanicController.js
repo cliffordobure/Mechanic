@@ -1,5 +1,5 @@
 const Mechanic = require('../models/Mechanic');
-const { findNearbyWithProfile } = require('../utils/nearbyAggregation');
+const { findNearbyWithAutoProfile, findBrowseWithAutoProfile } = require('../utils/nearbyAggregation');
 
 async function upsertMechanic(req, res) {
   if (req.user.role !== 'mechanic') {
@@ -23,16 +23,32 @@ async function getNearby(req, res) {
   const { lat, lng, radius, page, limit, service, brand } = req.query;
   const maxDistance = Number(radius);
 
-  let items = await findNearbyWithProfile({
+  let items = await findNearbyWithAutoProfile({
     role: 'mechanic',
-    profileCollection: Mechanic.collection.name,
-    foreignUserField: 'userId',
+    ProfileModel: Mechanic,
+    setOnInsertForUser: () => ({
+      services: [],
+      carBrands: [],
+    }),
     lat,
     lng,
     maxDistanceMeters: maxDistance,
     page,
     limit,
   });
+
+  if (items.length === 0) {
+    items = await findBrowseWithAutoProfile({
+      role: 'mechanic',
+      ProfileModel: Mechanic,
+      setOnInsertForUser: () => ({
+        services: [],
+        carBrands: [],
+      }),
+      page,
+      limit,
+    });
+  }
 
   if (service) {
     const re = new RegExp(service.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');

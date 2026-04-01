@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "seed": "node scripts/seed-dummy.js"
+    "seed": "node scripts/seed-dummy.js",
+    "verify-db": "node scripts/verify-db-flow.js",
+    "backfill-profiles": "node scripts/backfill-role-profiles.js"
   },
   "engines": {
     "node": ">=18"

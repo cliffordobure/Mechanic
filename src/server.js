@@ -1,4 +1,5 @@
-require('dotenv').config();
+const { loadBackendEnv } = require('./config/loadEnv');
+loadBackendEnv();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -34,6 +35,25 @@ app.use('/api/sellers', sellersRoutes);
 
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
+/** One-time demo reload: set SEED_HTTP_KEY on the server, then GET .../seed-demo?key=YOUR_KEY */
+app.get('/api/setup/seed-demo', async (req, res) => {
+  const expected = process.env.SEED_HTTP_KEY;
+  if (!expected) {
+    return res.status(404).json({ message: 'Not found' });
+  }
+  if (req.query.key !== expected) {
+    return res.status(403).json({ message: 'Forbidden' });
+  }
+  try {
+    const { clearDemoAccounts, insertDemoRecords } = require('./seed/runDemoSeed');
+    await clearDemoAccounts();
+    await insertDemoRecords({ clearFirst: false, verbose: false });
+    return res.json({ ok: true, message: 'Demo mechanics & sellers inserted.' });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 /**
  * @openapi
  * /health:
@@ -67,12 +87,35 @@ app.use((err, req, res, next) => {
   res.status(500).json({ message: 'Internal server error' });
 });
 
+async function maybeAutoSeedDemo() {
+  if (process.env.AUTO_SEED_DEMO === 'false') {
+    return;
+  }
+  try {
+    const Mechanic = require('./models/Mechanic');
+    const n = await Mechanic.countDocuments();
+    if (n > 0) {
+      return;
+    }
+    const { insertDemoRecords } = require('./seed/runDemoSeed');
+    // eslint-disable-next-line no-console
+    console.log(
+      'No mechanics in DB — inserting demo listings (disable with AUTO_SEED_DEMO=false on Render).'
+    );
+    await insertDemoRecords({ clearFirst: false, verbose: true });
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error('Demo auto-seed failed:', e.message);
+  }
+}
+
 async function start() {
   if (!process.env.JWT_SECRET) {
     // eslint-disable-next-line no-console
     console.warn('Warning: JWT_SECRET is not set. Set it in .env for production.');
   }
   await connectDb();
+  await maybeAutoSeedDemo();
   app.listen(PORT, () => {
     // eslint-disable-next-line no-console
     console.log(`API listening on http://localhost:${PORT}`);

@@ -10,12 +10,35 @@ async function upsertSeller(req, res) {
   const $set = {};
   if (shopName !== undefined) $set.shopName = shopName;
   if (inventory !== undefined) $set.inventory = inventory;
+  const $setOnInsert = {
+    userId: req.userId,
+    shopName: defaultShopName(req.user.name),
+    inventory: [],
+  };
   const doc = await Seller.findOneAndUpdate(
     { userId: req.userId },
-    { $set, $setOnInsert: { userId: req.userId } },
+    { $set, $setOnInsert },
     { new: true, upsert: true, runValidators: true }
   );
   return res.json({ seller: doc });
+}
+
+async function getMine(req, res) {
+  if (req.user.role !== 'seller') {
+    return res.status(403).json({ message: 'Only sellers have a parts shop profile' });
+  }
+  let seller = await Seller.findOne({ userId: req.userId }).populate('userId', '-password');
+  if (!seller) {
+    await Seller.create({
+      userId: req.userId,
+      shopName: defaultShopName(req.user.name),
+      inventory: [],
+    });
+    seller = await Seller.findOne({ userId: req.userId }).populate('userId', '-password');
+  }
+  const obj = seller.toObject();
+  obj.user = obj.userId;
+  return res.json({ seller: obj });
 }
 
 async function getNearby(req, res) {
@@ -73,4 +96,4 @@ async function getById(req, res) {
   return res.json({ seller: obj });
 }
 
-module.exports = { upsertSeller, getNearby, getById };
+module.exports = { upsertSeller, getNearby, getById, getMine };

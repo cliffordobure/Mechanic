@@ -1,6 +1,7 @@
 const Seller = require('../models/Seller');
 const { findNearbyWithAutoProfile, findBrowseWithAutoProfile } = require('../utils/nearbyAggregation');
 const { defaultShopName } = require('../utils/roleProfileDefaults');
+const { formatSellerForClient } = require('../utils/sellerResponse');
 
 async function upsertSeller(req, res) {
   if (req.user.role !== 'seller') {
@@ -23,7 +24,8 @@ async function upsertSeller(req, res) {
     { $set, $setOnInsert },
     { new: true, upsert: true, runValidators: true }
   );
-  return res.json({ seller: doc });
+  const populated = await Seller.findById(doc._id).populate('userId', '-password');
+  return res.json({ seller: formatSellerForClient(populated) });
 }
 
 async function getMine(req, res) {
@@ -39,9 +41,7 @@ async function getMine(req, res) {
     });
     seller = await Seller.findOne({ userId: req.userId }).populate('userId', '-password');
   }
-  const obj = seller.toObject();
-  obj.user = obj.userId;
-  return res.json({ seller: obj });
+  return res.json({ seller: formatSellerForClient(seller) });
 }
 
 async function getNearby(req, res) {
@@ -94,9 +94,7 @@ async function getById(req, res) {
   if (!seller) {
     return res.status(404).json({ message: 'Seller not found' });
   }
-  const obj = seller.toObject();
-  obj.user = obj.userId;
-  return res.json({ seller: obj });
+  return res.json({ seller: formatSellerForClient(seller) });
 }
 
 module.exports = { upsertSeller, getNearby, getById, getMine };

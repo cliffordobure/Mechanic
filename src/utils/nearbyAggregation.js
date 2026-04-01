@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const { formatSellerForClient } = require('./sellerResponse');
 
 /**
  * Upsert profile rows and build API-shaped list (same order as `candidates`).
@@ -34,11 +35,13 @@ async function ensureProfilesAndMerge(candidates, ProfileModel, setOnInsertForUs
     delete user.dist;
     delete user.password;
     delete user.__v;
-    merged.push({
-      ...profile,
-      user,
-      userId: row._id,
-    });
+    merged.push(
+      formatSellerForClient({
+        ...profile,
+        user,
+        userId: row._id,
+      })
+    );
   }
   return merged;
 }

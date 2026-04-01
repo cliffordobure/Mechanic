@@ -10,11 +10,14 @@ async function upsertSeller(req, res) {
   const $set = {};
   if (shopName !== undefined) $set.shopName = shopName;
   if (inventory !== undefined) $set.inventory = inventory;
-  const $setOnInsert = {
-    userId: req.userId,
-    shopName: defaultShopName(req.user.name),
-    inventory: [],
-  };
+  // MongoDB forbids the same path in both $set and $setOnInsert (ConflictingUpdateOperators).
+  const $setOnInsert = { userId: req.userId };
+  if (shopName === undefined) {
+    $setOnInsert.shopName = defaultShopName(req.user.name);
+  }
+  if (inventory === undefined) {
+    $setOnInsert.inventory = [];
+  }
   const doc = await Seller.findOneAndUpdate(
     { userId: req.userId },
     { $set, $setOnInsert },
